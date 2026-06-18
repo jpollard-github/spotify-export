@@ -21,7 +21,9 @@ const data = {
   yearlyTrends: readJson("yearly-trends.json"),
   artistGenres,
   recentRankings: summarizeRecentRankings(streamEvents),
-  moodTimelines: summarizeMoodTimelines(streamEvents, artistGenres)
+  moodTimelines: summarizeMoodTimelines(streamEvents, artistGenres),
+  eras: detectEras(streamEvents, artistGenres),
+  musicalDna: summarizeMusicalDna(streamEvents)
 };
 
 fs.mkdirSync(reportDir, { recursive: true });
@@ -134,6 +136,30 @@ function renderHtml(source) {
       </div>
       <div class="genre-grid">
         ${genreSummary.topGenres.map((genre) => genreTile(genre, genreSummary.topGenres[0]?.hours ?? 1)).join("")}
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="section-heading">
+        <h2>Eras</h2>
+        <p>Detected chapters where an artist, album, or genre suddenly dominated a month or season.</p>
+      </div>
+      <div class="era-grid">
+        ${source.eras.map((era) => eraCard(era)).join("")}
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="section-heading">
+        <h2>Musical DNA</h2>
+        <p>Artist-level fingerprints: foundations, growth arcs, disappearances, recurring comforts, and new discoveries.</p>
+      </div>
+      <div class="dna-grid">
+        ${dnaPanel("Foundational Artists", source.musicalDna.foundationalArtists, (item) => item.artistName, (item) => `${item.yearsActive} active years`, (item) => `${formatHours(item.totalHoursPlayed)}h - ${item.firstYear}-${item.lastYear}`)}
+        ${dnaPanel("Evolution Artists", source.musicalDna.evolutionArtists, (item) => item.artistName, (item) => `${item.growthRatio}x rise`, (item) => `${formatHours(item.previousBestHours)}h before ${item.peakYear}; ${formatHours(item.peakYearHours)}h in ${item.peakYear}`)}
+        ${dnaPanel("One-Season Wonders", source.musicalDna.oneSeasonWonders, (item) => item.artistName, (item) => `${formatHours(item.peakYearHours)}h in ${item.peakYear}`, (item) => `${Math.round(item.peakShare * 100)}% of all listening to this artist happened then`)}
+        ${dnaPanel("Comfort Artists", source.musicalDna.comfortArtists, (item) => item.artistName, (item) => `${item.streakYears} year streak`, (item) => `${formatHours(item.totalHoursPlayed)}h - returned every year in span`)}
+        ${dnaPanel("Discovery Artists", source.musicalDna.discoveryArtists, (item) => item.artistName, (item) => `first heard ${shortDateLabel(item.firstPlayed.slice(0, 10), "day")}`, (item) => `${formatHours(item.totalHoursPlayed)}h - ${formatNumber(item.totalStreams)} plays`)}
       </div>
     </section>
 
@@ -330,6 +356,19 @@ h2 { margin-bottom: 6px; font-size: 1.05rem; text-transform: uppercase; letter-s
 .genre-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 .genre-tile strong { display: block; min-height: 2.4em; overflow-wrap: anywhere; }
 
+.era-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.era-card { padding: 16px; border: 1px solid var(--line); background: var(--panel); }
+.era-card h3 { margin: 0 0 10px; color: var(--yellow); font-size: 1.1rem; line-height: 1.25; overflow-wrap: anywhere; }
+.era-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; color: var(--muted); font-size: 0.78rem; }
+.era-meta span { padding: 5px 7px; border: 1px solid var(--line); }
+.era-card p { margin-bottom: 0; color: #e9e5f4; line-height: 1.5; }
+
+.dna-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.dna-card { padding: 16px; border: 1px solid var(--line); background: var(--panel); }
+.dna-card h3 { margin: 0 0 12px; color: var(--yellow); font-size: 1rem; line-height: 1.25; }
+.dna-card .rank-list li { grid-template-columns: 28px minmax(0, 1fr); padding: 8px 0; }
+.dna-card .rank-value { grid-column: 2; }
+
 .leaderboards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .leaderboard-card, .panel, .recent-card { padding: 16px; }
 
@@ -440,6 +479,410 @@ function summarizeGenresForArtistMetrics(artistMetrics, artistGenres) {
     topGenres: [...genres.values()]
       .sort((a, b) => b.streams - a.streams || b.hours - a.hours)
       .slice(0, 18)
+  };
+}
+
+function summarizeMusicalDna(events) {
+  const artists = new Map();
+  const latestTime = events.reduce((latest, event) => {
+    const playedTime = Date.parse(event.playedAt);
+    return Number.isFinite(playedTime) && playedTime > latest ? playedTime : latest;
+  }, 0);
+  const latestDate = new Date(latestTime);
+  const latestYear = latestDate.getUTCFullYear();
+  const discoveryStart = new Date(latestTime);
+  discoveryStart.setUTCFullYear(discoveryStart.getUTCFullYear() - 1);
+
+  for (const event of events) {
+    if (!event.artistName || !event.playedAt) continue;
+
+    const year = String(event.playedYear ?? new Date(event.playedAt).getUTCFullYear());
+    const metric = artists.get(event.artistName) ?? {
+      artistName: event.artistName,
+      totalMsPlayed: 0,
+      totalStreams: 0,
+      firstPlayed: event.playedAt,
+      lastPlayed: event.playedAt,
+      years: new Map()
+    };
+    const yearMetric = metric.years.get(year) ?? {
+      year,
+      totalMsPlayed: 0,
+      totalStreams: 0
+    };
+
+    metric.totalMsPlayed += event.msPlayed ?? 0;
+    metric.totalStreams += 1;
+    metric.firstPlayed = event.playedAt < metric.firstPlayed ? event.playedAt : metric.firstPlayed;
+    metric.lastPlayed = event.playedAt > metric.lastPlayed ? event.playedAt : metric.lastPlayed;
+    yearMetric.totalMsPlayed += event.msPlayed ?? 0;
+    yearMetric.totalStreams += 1;
+    metric.years.set(year, yearMetric);
+    artists.set(event.artistName, metric);
+  }
+
+  const artistRows = [...artists.values()].map(finishArtistDnaMetric);
+
+  return {
+    foundationalArtists: artistRows
+      .filter((artist) => artist.yearsActive >= 8)
+      .sort((a, b) => b.yearsActive - a.yearsActive || b.totalMsPlayed - a.totalMsPlayed)
+      .slice(0, 8),
+    evolutionArtists: artistRows
+      .map(evolutionMetric)
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8),
+    oneSeasonWonders: artistRows
+      .map(oneSeasonMetric)
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8),
+    comfortArtists: artistRows
+      .filter((artist) => artist.streakYears >= 5)
+      .sort((a, b) => b.streakYears - a.streakYears || b.totalMsPlayed - a.totalMsPlayed)
+      .slice(0, 8),
+    discoveryArtists: artistRows
+      .filter((artist) => Date.parse(artist.firstPlayed) >= discoveryStart.getTime() && (artist.totalHoursPlayed >= 2 || artist.totalStreams >= 20))
+      .sort((a, b) => b.totalMsPlayed - a.totalMsPlayed || b.totalStreams - a.totalStreams)
+      .slice(0, 8),
+    latestYear
+  };
+}
+
+function finishArtistDnaMetric(metric) {
+  const years = [...metric.years.values()].sort((a, b) => a.year.localeCompare(b.year));
+  const activeYears = years.map((year) => Number(year.year));
+  const firstYear = activeYears[0];
+  const lastYear = activeYears.at(-1);
+
+  return {
+    artistName: metric.artistName,
+    totalMsPlayed: metric.totalMsPlayed,
+    totalHoursPlayed: Number((metric.totalMsPlayed / 3_600_000).toFixed(2)),
+    totalStreams: metric.totalStreams,
+    firstPlayed: metric.firstPlayed,
+    lastPlayed: metric.lastPlayed,
+    firstYear,
+    lastYear,
+    yearsActive: activeYears.length,
+    streakYears: contiguousYearStreak(activeYears),
+    years
+  };
+}
+
+function contiguousYearStreak(activeYears) {
+  if (!activeYears.length) return 0;
+
+  let longest = 1;
+  let current = 1;
+
+  for (let index = 1; index < activeYears.length; index += 1) {
+    if (activeYears[index] === activeYears[index - 1] + 1) {
+      current += 1;
+    } else {
+      longest = Math.max(longest, current);
+      current = 1;
+    }
+  }
+
+  return Math.max(longest, current);
+}
+
+function evolutionMetric(artist) {
+  const years = artist.years;
+  let best = undefined;
+
+  for (let index = 1; index < years.length; index += 1) {
+    const current = years[index];
+    const previousBest = Math.max(...years.slice(0, index).map((year) => year.totalMsPlayed), 1);
+    const previousBestHours = previousBest / 3_600_000;
+    const ratio = current.totalMsPlayed / previousBest;
+    const currentHours = current.totalMsPlayed / 3_600_000;
+
+    if (previousBestHours < 1 || ratio < 3 || currentHours < 8) continue;
+
+    const candidate = {
+      artistName: artist.artistName,
+      growthRatio: Number(ratio.toFixed(1)),
+      previousBestHours: Number(previousBestHours.toFixed(2)),
+      peakYearHours: Number(currentHours.toFixed(2)),
+      peakYear: current.year,
+      totalHoursPlayed: artist.totalHoursPlayed,
+      totalStreams: artist.totalStreams,
+      score: ratio * currentHours
+    };
+
+    if (!best || candidate.score > best.score) best = candidate;
+  }
+
+  return best;
+}
+
+function oneSeasonMetric(artist) {
+  if (artist.years.length < 2) return undefined;
+
+  const peak = [...artist.years].sort((a, b) => b.totalMsPlayed - a.totalMsPlayed)[0];
+  const afterPeakMs = artist.years
+    .filter((year) => year.year > peak.year)
+    .reduce((sum, year) => sum + year.totalMsPlayed, 0);
+  const peakShare = peak.totalMsPlayed / Math.max(artist.totalMsPlayed, 1);
+  const peakYearHours = peak.totalMsPlayed / 3_600_000;
+
+  if (peakShare < 0.65 || peakYearHours < 8 || afterPeakMs > peak.totalMsPlayed * 0.25) return undefined;
+
+  return {
+    artistName: artist.artistName,
+    peakYear: peak.year,
+    peakYearHours: Number(peakYearHours.toFixed(2)),
+    peakShare: Number(peakShare.toFixed(3)),
+    totalHoursPlayed: artist.totalHoursPlayed,
+    totalStreams: artist.totalStreams,
+    score: peakShare * peakYearHours
+  };
+}
+
+function detectEras(events, artistGenres) {
+  const tagsByArtist = new Map(artistGenres.map((artist) => [artist.artistName, artist.genreTags ?? []]));
+  const monthTotals = new Map();
+  const artists = new Map();
+  const albums = new Map();
+  const genres = new Map();
+  const firstSeen = new Map();
+  const monthsByEntity = new Map();
+
+  for (const event of events) {
+    if (!event.playedMonth || !event.artistName) continue;
+
+    const weight = event.msPlayed ?? 0;
+    addTotal(monthTotals, event.playedMonth, weight);
+    firstSeen.set(event.artistName, minString(firstSeen.get(event.artistName), event.playedMonth));
+
+    addEraMetric(artists, event.artistName, event.playedMonth, weight, event, {
+      type: "artist",
+      subject: event.artistName
+    });
+    setMonth(monthsByEntity, `artist:${event.artistName}`, event.playedMonth);
+
+    if (event.albumName) {
+      const albumKey = `${event.artistName}\u0000${event.albumName}`;
+      addEraMetric(albums, albumKey, event.playedMonth, weight, event, {
+        type: "album",
+        subject: event.albumName,
+        artistName: event.artistName
+      });
+      setMonth(monthsByEntity, `album:${albumKey}`, event.playedMonth);
+    }
+
+    for (const tag of (tagsByArtist.get(event.artistName) ?? []).slice(0, 3)) {
+      addEraMetric(genres, tag, event.playedMonth, weight, event, {
+        type: "genre",
+        subject: tag
+      });
+      setMonth(monthsByEntity, `genre:${tag}`, event.playedMonth);
+    }
+  }
+
+  const candidates = [
+    ...eraCandidates(artists, monthTotals, monthsByEntity, firstSeen),
+    ...eraCandidates(albums, monthTotals, monthsByEntity, firstSeen),
+    ...eraCandidates(genres, monthTotals, monthsByEntity, firstSeen)
+  ];
+
+  const ranked = candidates.sort((a, b) => b.score - a.score);
+  const latestYear = Math.max(...ranked.map((era) => Number(era.year)));
+  const selected = [
+    ...ranked.slice(0, 9),
+    ...ranked.filter((era) => Number(era.year) >= latestYear - 1).slice(0, 8)
+  ];
+
+  return selected
+    .filter(uniqueEra())
+    .slice(0, 14)
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function addTotal(map, key, value) {
+  map.set(key, (map.get(key) ?? 0) + value);
+}
+
+function minString(a, b) {
+  if (!a) return b;
+  return a < b ? a : b;
+}
+
+function setMonth(map, key, month) {
+  const months = map.get(key) ?? new Set();
+  months.add(month);
+  map.set(key, months);
+}
+
+function addEraMetric(map, key, month, weight, event, attrs) {
+  const monthMap = map.get(key) ?? new Map();
+  const metric = monthMap.get(month) ?? {
+    key,
+    month,
+    ...attrs,
+    totalMsPlayed: 0,
+    totalStreams: 0,
+    meaningfulStreams: 0,
+    topTrack: undefined,
+    tracks: new Map()
+  };
+
+  metric.totalMsPlayed += weight;
+  metric.totalStreams += 1;
+  if (weight >= 30_000) metric.meaningfulStreams += 1;
+
+  if (event.trackName) {
+    const track = metric.tracks.get(event.trackName) ?? {
+      trackName: event.trackName,
+      totalMsPlayed: 0,
+      totalStreams: 0
+    };
+    track.totalMsPlayed += weight;
+    track.totalStreams += 1;
+    metric.tracks.set(event.trackName, track);
+    metric.topTrack = [...metric.tracks.values()].sort((a, b) => b.totalMsPlayed - a.totalMsPlayed)[0]?.trackName;
+  }
+
+  monthMap.set(month, metric);
+  map.set(key, monthMap);
+}
+
+function eraCandidates(entityMap, monthTotals, monthsByEntity, firstSeen) {
+  const candidates = [];
+
+  for (const [entityKey, monthMap] of entityMap.entries()) {
+    const sortedMonths = [...monthMap.keys()].sort();
+    const fullEntityKey = `${monthMap.values().next().value.type}:${entityKey}`;
+
+    for (const month of sortedMonths) {
+      const metric = monthMap.get(month);
+      const monthTotal = monthTotals.get(month) ?? 1;
+      const share = metric.totalMsPlayed / monthTotal;
+      const hours = metric.totalMsPlayed / 3_600_000;
+      const previousMonths = sortedMonths.filter((item) => item < month);
+      const previousStrongMonth = previousMonths.at(-1);
+      const gap = previousStrongMonth ? monthDistance(previousStrongMonth, month) : null;
+      const firstMonth = metric.type === "artist" ? firstSeen.get(metric.subject) : sortedMonths[0];
+      const strongMonthsInYear = sortedMonths.filter((item) => item.startsWith(month.slice(0, 4)) && (monthMap.get(item).totalMsPlayed / (monthTotals.get(item) ?? 1)) >= 0.1);
+
+      if (!isEraWorthy(metric.type, share, hours, metric.meaningfulStreams)) continue;
+
+      const recencyBonus = (Number(month.slice(0, 4)) - 2014) * 8;
+      const score = share * 100 + hours + metric.meaningfulStreams * 0.12 + (gap && gap >= 12 ? 12 : 0) + strongMonthsInYear.length * 3 + recencyBonus;
+      const name = eraName(metric, month, {
+        gap,
+        firstMonth,
+        strongMonthsInYear
+      });
+
+      candidates.push({
+        name,
+        month,
+        year: month.slice(0, 4),
+        type: metric.type,
+        subject: metric.subject,
+        artistName: metric.artistName,
+        totalHoursPlayed: Number(hours.toFixed(1)),
+        totalStreams: metric.totalStreams,
+        meaningfulStreams: metric.meaningfulStreams,
+        share: Number(share.toFixed(3)),
+        score,
+        explanation: eraExplanation(metric, month, share, gap, strongMonthsInYear),
+        topTrack: metric.topTrack,
+        entityKey: fullEntityKey
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function isEraWorthy(type, share, hours, streams) {
+  if (type === "genre") return share >= 0.28 && hours >= 18;
+  if (type === "album") return share >= 0.12 && (hours >= 8 || streams >= 45);
+  return share >= 0.08 && (hours >= 6 || streams >= 30);
+}
+
+function eraName(metric, month, context) {
+  const year = month.slice(0, 4);
+  const subject = titleCasePreserve(metric.subject);
+
+  if (metric.type === "genre") return eraTitle(subject, `${seasonName(month)} (${year})`);
+  if (context.gap && context.gap >= 18) return eraTitle(subject, `Return (${year})`);
+  if (context.gap && context.gap >= 10) return eraTitle(subject, `Revival (${year})`);
+  if (context.firstMonth === month) return eraTitle(subject, `Discovery (${year})`);
+  if (context.strongMonthsInYear.length >= 2) return eraTitle(subject, `Months (${year})`);
+  return eraTitle(subject, `Chapter (${year})`);
+}
+
+function eraTitle(subject, suffix) {
+  const cleanSubject = subject.trim();
+
+  return cleanSubject.toLowerCase().startsWith("the ")
+    ? `${cleanSubject} ${suffix}`
+    : `The ${cleanSubject} ${suffix}`;
+}
+
+function eraExplanation(metric, month, share, gap, strongMonthsInYear) {
+  const shareText = `${Math.round(share * 100)}%`;
+  const period = readableMonth(month);
+  const subject = metric.type === "album" ? `${metric.subject} by ${metric.artistName}` : metric.subject;
+  const repeatText = strongMonthsInYear.length >= 2 ? ` It was part of ${strongMonthsInYear.length} strong month(s) that year.` : "";
+  const gapText = gap && gap >= 10 ? ` It also followed roughly ${gap} months away from that level of attention.` : "";
+  const trackText = metric.topTrack ? ` The anchor track was "${metric.topTrack}."` : "";
+
+  return `${subject} took ${shareText} of listening time in ${period}, with ${formatHours(metric.totalMsPlayed / 3_600_000)} hours and ${formatNumber(metric.meaningfulStreams)} meaningful plays.${repeatText}${gapText}${trackText}`;
+}
+
+function monthDistance(a, b) {
+  const [ay, am] = a.split("-").map(Number);
+  const [by, bm] = b.split("-").map(Number);
+  return (by - ay) * 12 + (bm - am);
+}
+
+function seasonName(month) {
+  const monthNumber = Number(month.slice(5, 7));
+  if ([12, 1, 2].includes(monthNumber)) return "Winter";
+  if ([3, 4, 5].includes(monthNumber)) return "Spring";
+  if ([6, 7, 8].includes(monthNumber)) return "Summer";
+  return "Autumn";
+}
+
+function readableMonth(month) {
+  const date = new Date(`${month}-01T00:00:00Z`);
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC"
+  });
+}
+
+function titleCasePreserve(value) {
+  return value
+    .split(" ")
+    .map((word) => (word.length <= 3 && word === word.toUpperCase() ? word : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
+function uniqueEra() {
+  const seenSubjects = new Set();
+  const seenMonths = new Map();
+
+  return (era) => {
+    const subjectKey = `${era.type}:${era.subject}`;
+    const monthKey = `${era.year}:${era.type}`;
+    const monthCount = seenMonths.get(monthKey) ?? 0;
+    const maxForYearType = era.type === "genre" ? 1 : 2;
+
+    if (seenSubjects.has(subjectKey)) return false;
+    if (monthCount >= maxForYearType) return false;
+
+    seenSubjects.add(subjectKey);
+    seenMonths.set(monthKey, monthCount + 1);
+    return true;
   };
 }
 
@@ -733,6 +1176,35 @@ function genreTile(genre, maxHours) {
     <div class="meter"><span style="--value:${percentOf(genre.hours, maxHours)}%"></span></div>
     <div class="metric-line"><span>${formatHours(genre.hours)}h</span><span>${formatNumber(genre.artists)} artists</span></div>
   </article>`;
+}
+
+function eraCard(era) {
+  const subject = era.artistName ? `${era.subject} / ${era.artistName}` : era.subject;
+
+  return `<article class="era-card">
+    <h3>${escapeHtml(era.name)}</h3>
+    <div class="era-meta">
+      <span>${escapeHtml(readableMonth(era.month))}</span>
+      <span>${escapeHtml(titleCase(era.type))}</span>
+      <span>${formatHours(era.totalHoursPlayed)}h</span>
+      <span>${formatNumber(era.meaningfulStreams)} meaningful plays</span>
+      <span>${Math.round(era.share * 100)}% of month</span>
+    </div>
+    <p>${escapeHtml(era.explanation)}</p>
+    <div class="evidence-list">
+      <span>${escapeHtml(subject)}</span>
+      ${era.topTrack ? `<span>Anchor: ${escapeHtml(era.topTrack)}</span>` : ""}
+    </div>
+  </article>`;
+}
+
+function dnaPanel(title, items, titleFor, valueForItem, metaFor) {
+  return `<section class="dna-card">
+    <h3>${escapeHtml(title)}</h3>
+    <ol class="rank-list">
+      ${items.map((item, index) => listItem(index, titleFor(item), valueForItem(item), metaFor(item))).join("")}
+    </ol>
+  </section>`;
 }
 
 function leaderboard(title, items, titleFor, valueForItem, metaFor) {

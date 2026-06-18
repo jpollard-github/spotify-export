@@ -147,6 +147,8 @@ The generated HTML currently includes these sections:
 - Recent Months: compact pulse chart for the latest 36 months.
 - Peak Months: highest listening months by hours played.
 - Genre Weather: Last.fm genre tags weighted by listening time.
+- Eras: detected artist, album, and genre chapters where something suddenly dominated a month or season.
+- Musical DNA: foundational artists, evolution artists, one-season wonders, comfort artists, and discovery artists.
 - Past Three Months Mood Read: possible emotions, mental state, mood, explanation, and evidence.
 - Whole Timeframe Mood Read: possible emotions, mental state, mood, explanation, and evidence.
 - Past Three Months Mood Graph: daily low-to-high mood score graph.
