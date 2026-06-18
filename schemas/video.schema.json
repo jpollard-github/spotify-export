@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/video.schema.json",
+  "title": "Spotify Video Streaming History Record",
+  "type": "object",
+  "properties": {
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "username": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "ms_played": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "conn_country": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2
+    },
+    "ip_addr_decrypted": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "user_agent_decrypted": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "master_metadata_track_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "master_metadata_album_artist_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "master_metadata_album_album_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "spotify_track_uri": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "episode_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "episode_show_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "spotify_episode_uri": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason_start": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason_end": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "shuffle": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "skipped": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "offline": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "offline_timestamp": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "incognito_mode": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "ts",
+    "username",
+    "platform",
+    "ms_played",
+    "conn_country",
+    "ip_addr_decrypted",
+    "user_agent_decrypted",
+    "master_metadata_track_name",
+    "master_metadata_album_artist_name",
+    "master_metadata_album_album_name",
+    "spotify_track_uri",
+    "episode_name",
+    "episode_show_name",
+    "spotify_episode_uri",
+    "reason_start",
+    "reason_end",
+    "shuffle",
+    "skipped",
+    "offline",
+    "offline_timestamp",
+    "incognito_mode"
+  ],
+  "additionalProperties": false
+}
