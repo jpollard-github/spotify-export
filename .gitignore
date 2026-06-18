@@ -1,3 +1,4 @@
 raw/
 output/
 .DS_Store
+.env.local

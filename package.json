@@ -1,0 +1,13 @@
+{
+  "name": "spotify-export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "spotify:analyze": "node scripts/spotify-analyze.mjs",
+    "lastfm:enrich": "node scripts/lastfm-enrich-genres.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

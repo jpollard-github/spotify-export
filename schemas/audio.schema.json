@@ -8,9 +8,6 @@
       "type": "string",
       "format": "date-time"
     },
-    "username": {
-      "type": "string"
-    },
     "platform": {
       "type": "string"
     },
@@ -23,13 +20,7 @@
       "minLength": 2,
       "maxLength": 2
     },
-    "ip_addr_decrypted": {
-      "type": [
-        "string",
-        "null"
-      ]
-    },
-    "user_agent_decrypted": {
+    "ip_addr": {
       "type": [
         "string",
         "null"
@@ -72,6 +63,30 @@
       ]
     },
     "spotify_episode_uri": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "audiobook_title": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "audiobook_uri": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "audiobook_chapter_uri": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "audiobook_chapter_title": {
       "type": [
         "string",
         "null"
@@ -123,12 +138,10 @@
   },
   "required": [
     "ts",
-    "username",
     "platform",
     "ms_played",
     "conn_country",
-    "ip_addr_decrypted",
-    "user_agent_decrypted",
+    "ip_addr",
     "master_metadata_track_name",
     "master_metadata_album_artist_name",
     "master_metadata_album_album_name",
@@ -136,6 +149,10 @@
     "episode_name",
     "episode_show_name",
     "spotify_episode_uri",
+    "audiobook_title",
+    "audiobook_uri",
+    "audiobook_chapter_uri",
+    "audiobook_chapter_title",
     "reason_start",
     "reason_end",
     "shuffle",

@@ -1,0 +1,30 @@
+type StreamEvent = {
+  eventId: string;
+  sourceFile: string;
+  sourceIndex: number;
+  mediaType: "audio" | "video";
+  playedAt: string;
+  playedYear: number;
+  playedMonth: string;
+  playedHour: number;
+  msPlayed: number;
+  artistName?: string;
+  trackName?: string;
+  albumName?: string;
+  spotifyTrackUri?: string;
+  episodeName?: string;
+  episodeShowName?: string;
+  spotifyEpisodeUri?: string;
+  audiobookTitle?: string;
+  audiobookChapterTitle?: string;
+  platform?: string;
+  country?: string;
+  reasonStart?: string;
+  reasonEnd?: string;
+  shuffle?: boolean;
+  skipped?: boolean;
+  offline?: boolean;
+  incognitoMode?: boolean;
+};
+
+export type { StreamEvent };
