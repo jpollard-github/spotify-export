@@ -140,6 +140,24 @@ Open `output/music-report/index.html` in a browser to view the static 80s-themed
 
 The report also reads `output/stream-events.ndjson` to build the “Past 3 Months” section, which shows the top 50 artists, songs, and albums by listen count for the three months ending at the latest play date in the export.
 
+The generated HTML currently includes these sections:
+
+- Hero summary with total hours, streams, peak year, and genre match count.
+- Yearly Signal: listening hours and skip rate by year.
+- Recent Months: compact pulse chart for the latest 36 months.
+- Peak Months: highest listening months by hours played.
+- Genre Weather: Last.fm genre tags weighted by listening time.
+- Past Three Months Mood Read: possible emotions, mental state, mood, explanation, and evidence.
+- Whole Timeframe Mood Read: possible emotions, mental state, mood, explanation, and evidence.
+- Past Three Months Mood Graph: daily low-to-high mood score graph.
+- Whole Timeframe Mood Graph: monthly low-to-high mood score graph.
+- Past 3 Months: top 50 artists, songs, and albums by listen count.
+- All-time leaderboards: top artists, songs, albums, and videos.
+- Long Lifespans: artists active across the most years.
+- Repeat Track Fixations: strongest single-day song repeats.
+- Album Fixation Weeks: strongest one-week album repeats.
+- Video / Music Ratio: audio versus video listening split.
+
 ## Website Import Notes
 
 The website should not process raw Spotify exports directly. The better flow is:
