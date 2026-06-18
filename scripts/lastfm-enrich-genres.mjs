@@ -134,7 +134,7 @@ async function lastfmFetch(url) {
       const response = await fetch(url, { signal: controller.signal });
       const body = await response.json();
 
-      if (body.error === 29) {
+      if (response.status === 429 || body.error === 29) {
         throw new LastfmRateLimitError(body.message ?? "Rate limit exceeded");
       }
 
@@ -189,7 +189,8 @@ function artistGenres(enriched) {
     genreTags: item.genreTags,
     topLastfmTags: item.lastfmArtist?.tags?.slice(0, maxTags),
     totalStreams: item.totalStreams,
-    totalHoursPlayed: item.totalHoursPlayed
+    totalMsPlayed: item.totalMsPlayed,
+    totalHoursPlayed: hoursFor(item)
   }));
 }
 
@@ -201,6 +202,7 @@ function buildEnrichedFromCache(candidates, cache) {
 
       return {
         ...candidate,
+        totalHoursPlayed: hoursFor(candidate),
         genreTags: filterTags(lastfmArtist.tags),
         genreSource: "lastfm",
         lastfmArtist
@@ -211,6 +213,11 @@ function buildEnrichedFromCache(candidates, cache) {
 function writeOutputs(enriched) {
   writeJson(outputFile, enriched);
   writeJson(path.join(path.dirname(outputFile), "artist-genres.lastfm.json"), artistGenres(enriched));
+}
+
+function hoursFor(item) {
+  if (typeof item.totalHoursPlayed === "number") return item.totalHoursPlayed;
+  return Number(((item.totalMsPlayed ?? 0) / 3_600_000).toFixed(2));
 }
 
 function sleep(ms) {

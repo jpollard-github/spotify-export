@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "spotify:analyze": "node scripts/spotify-analyze.mjs",
-    "lastfm:enrich": "node scripts/lastfm-enrich-genres.mjs"
+    "lastfm:enrich": "node scripts/lastfm-enrich-genres.mjs",
+    "music:report": "node scripts/build-music-report.mjs"
   },
   "engines": {
     "node": ">=20"
