@@ -17,7 +17,8 @@ const data = {
   topSongs: readJson("top-songs.json"),
   topVideos: readJson("top-videos.json"),
   yearlyTrends: readJson("yearly-trends.json"),
-  artistGenres: readJson("artist-genres.lastfm.json")
+  artistGenres: readJson("artist-genres.lastfm.json"),
+  recentRankings: summarizeRecentRankings(readNdjson("stream-events.ndjson"))
 };
 
 fs.mkdirSync(reportDir, { recursive: true });
@@ -28,6 +29,15 @@ console.log(`Wrote ${path.relative(repoRoot, path.join(reportDir, "index.html"))
 
 function readJson(fileName) {
   return JSON.parse(fs.readFileSync(path.join(outputRoot, fileName), "utf8"));
+}
+
+function readNdjson(fileName) {
+  return fs
+    .readFileSync(path.join(outputRoot, fileName), "utf8")
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function renderHtml(source) {
@@ -106,6 +116,18 @@ function renderHtml(source) {
       </div>
       <div class="genre-grid">
         ${genreSummary.topGenres.map((genre) => genreTile(genre, genreSummary.topGenres[0]?.hours ?? 1)).join("")}
+      </div>
+    </section>
+
+    <section class="band">
+      <div class="section-heading">
+        <h2>Past 3 Months</h2>
+        <p>Most listens from ${escapeHtml(source.recentRankings.startDate)} through ${escapeHtml(source.recentRankings.endDate)}, ranked by play count with listening time as the tie-breaker.</p>
+      </div>
+      <div class="recent-grid">
+        ${recentLeaderboard("Artists", source.recentRankings.artists, (item) => item.artistName, (item) => `${formatNumber(item.totalStreams)} plays`, (item) => `${formatHours(item.totalHoursPlayed)}h`)}
+        ${recentLeaderboard("Songs", source.recentRankings.songs, (item) => item.trackName, (item) => `${formatNumber(item.totalStreams)} plays`, (item) => `${item.artistName} - ${formatHours(item.totalHoursPlayed)}h`)}
+        ${recentLeaderboard("Albums", source.recentRankings.albums, (item) => item.albumName, (item) => `${formatNumber(item.totalStreams)} plays`, (item) => `${item.artistName} - ${formatHours(item.totalHoursPlayed)}h`)}
       </div>
     </section>
 
@@ -205,7 +227,7 @@ h2 { margin-bottom: 6px; font-size: 1.05rem; text-transform: uppercase; letter-s
 
 .lede { max-width: 680px; color: #e9e5f4; font-size: 1.12rem; line-height: 1.6; }
 
-.signal-panel, .panel, .leaderboard-card { border: 1px solid var(--line); background: var(--panel); box-shadow: 0 16px 60px rgba(0, 0, 0, 0.28); }
+.signal-panel, .panel, .leaderboard-card, .recent-card { border: 1px solid var(--line); background: var(--panel); box-shadow: 0 16px 60px rgba(0, 0, 0, 0.28); }
 
 .signal-panel { display: grid; gap: 10px; padding: 16px; }
 
@@ -259,7 +281,11 @@ h2 { margin-bottom: 6px; font-size: 1.05rem; text-transform: uppercase; letter-s
 .genre-tile strong { display: block; min-height: 2.4em; overflow-wrap: anywhere; }
 
 .leaderboards { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.leaderboard-card, .panel { padding: 16px; }
+.leaderboard-card, .panel, .recent-card { padding: 16px; }
+
+.recent-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.recent-card .rank-list { max-height: 760px; overflow: auto; padding-right: 4px; }
+.recent-card .rank-list li { grid-template-columns: 34px minmax(0, 1fr) auto; padding: 8px 0; }
 
 .mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0 0; }
 .mini-stats div { padding: 12px; background: rgba(255, 255, 255, 0.055); }
@@ -269,7 +295,7 @@ h2 { margin-bottom: 6px; font-size: 1.05rem; text-transform: uppercase; letter-s
 .footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 22px; font-size: 0.85rem; }
 
 @media (max-width: 920px) {
-  .hero, .split, .leaderboards { grid-template-columns: 1fr; }
+  .hero, .split, .leaderboards, .recent-grid { grid-template-columns: 1fr; }
   .hero { min-height: auto; padding: 44px 0 28px; }
 }
 
@@ -320,6 +346,78 @@ function summarizeGenres(artistGenres) {
   };
 }
 
+function summarizeRecentRankings(events) {
+  const latestTime = events.reduce((latest, event) => {
+    const playedTime = Date.parse(event.playedAt);
+    return Number.isFinite(playedTime) && playedTime > latest ? playedTime : latest;
+  }, 0);
+  const end = new Date(latestTime);
+  const start = new Date(latestTime);
+  start.setUTCMonth(start.getUTCMonth() - 3);
+
+  const artists = new Map();
+  const songs = new Map();
+  const albums = new Map();
+
+  for (const event of events) {
+    const playedTime = Date.parse(event.playedAt);
+    if (!Number.isFinite(playedTime) || playedTime < start.getTime() || playedTime > end.getTime()) continue;
+
+    if (event.artistName) {
+      addRecentMetric(artists, event.artistName, event, { artistName: event.artistName });
+    }
+
+    if (event.artistName && event.trackName) {
+      addRecentMetric(songs, `${event.artistName}\u0000${event.trackName}`, event, {
+        artistName: event.artistName,
+        trackName: event.trackName
+      });
+    }
+
+    if (event.artistName && event.albumName) {
+      addRecentMetric(albums, `${event.artistName}\u0000${event.albumName}`, event, {
+        artistName: event.artistName,
+        albumName: event.albumName
+      });
+    }
+  }
+
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+    artists: rankRecent(artists, 50),
+    songs: rankRecent(songs, 50),
+    albums: rankRecent(albums, 50)
+  };
+}
+
+function addRecentMetric(map, key, event, attrs) {
+  const metric = map.get(key) ?? {
+    key,
+    ...attrs,
+    totalStreams: 0,
+    totalMsPlayed: 0,
+    firstPlayed: event.playedAt,
+    lastPlayed: event.playedAt
+  };
+
+  metric.totalStreams += 1;
+  metric.totalMsPlayed += event.msPlayed ?? 0;
+  metric.firstPlayed = event.playedAt < metric.firstPlayed ? event.playedAt : metric.firstPlayed;
+  metric.lastPlayed = event.playedAt > metric.lastPlayed ? event.playedAt : metric.lastPlayed;
+  map.set(key, metric);
+}
+
+function rankRecent(map, limit) {
+  return [...map.values()]
+    .sort((a, b) => b.totalStreams - a.totalStreams || b.totalMsPlayed - a.totalMsPlayed)
+    .slice(0, limit)
+    .map(({ key, ...metric }) => ({
+      ...metric,
+      totalHoursPlayed: Number((metric.totalMsPlayed / 3_600_000).toFixed(2))
+    }));
+}
+
 function stat(label, value) {
   return `<dl class="stat"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></dl>`;
 }
@@ -351,6 +449,15 @@ function leaderboard(title, items, titleFor, valueForItem, metaFor) {
     <div class="section-heading tight"><h2>${escapeHtml(title)}</h2></div>
     <ol class="rank-list">
       ${items.slice(0, 10).map((item, index) => listItem(index, titleFor(item), valueForItem(item), metaFor(item))).join("")}
+    </ol>
+  </section>`;
+}
+
+function recentLeaderboard(title, items, titleFor, valueForItem, metaFor) {
+  return `<section class="recent-card">
+    <div class="section-heading tight"><h2>${escapeHtml(title)}</h2></div>
+    <ol class="rank-list">
+      ${items.map((item, index) => listItem(index, titleFor(item), valueForItem(item), metaFor(item))).join("")}
     </ol>
   </section>`;
 }

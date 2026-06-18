@@ -138,6 +138,8 @@ output/music-report/styles.css
 
 Open `output/music-report/index.html` in a browser to view the static 80s-themed report prototype.
 
+The report also reads `output/stream-events.ndjson` to build the “Past 3 Months” section, which shows the top 50 artists, songs, and albums by listen count for the three months ending at the latest play date in the export.
+
 ## Website Import Notes
 
 The website should not process raw Spotify exports directly. The better flow is:
