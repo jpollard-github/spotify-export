@@ -1,6 +1,6 @@
 # Spotify Export Analyzer
 
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/18b36d52-5f69-4576-aa10-053cc443c37e" />
+<img width="1280" height="853" alt="image" src="https://github.com/user-attachments/assets/28161950-60a8-476b-9931-0fbb4e2a3003" />
 
 Local tools for turning Spotify extended streaming-history JSON exports into normalized JSON, ranked summaries, Last.fm genre enrichment, and a static music report prototype.
 
